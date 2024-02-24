@@ -13,15 +13,15 @@
 
     <div class="section">
       <div class="container-budget">
-        <BudgetComponent :budget="budget" :empty-budget="emptyBudget" :alert-budget="alertBudget" @update-budget="validateBudget"/>
+        <PresupuestoComponente :budget="budget" :empty-budget="emptyBudget" :alert-budget="alertBudget" @update-budget="validateBudget"/>
       </div>
       
       <div class="container-days">
-        <RangeComponent :value="day" name="days" min="1" :max="30" @update-input="updateDays"/>
+        <RangoComponente :value="day" name="days" min="1" :max="30" @update-input="updateDays"/>
       </div>
 
       <div class="container-persons">
-        <RangeComponent :value="person" name="persons" min="1" max="10" @update-input="updatePersons"/>
+        <RangoComponente :value="person" name="persons" min="1" max="10" @update-input="updatePersons"/>
       </div>
 
       <div class="container-accommodation">
@@ -54,8 +54,8 @@
 <script setup>
 
 import { ref, onMounted, computed, watch, watchEffect } from 'vue'
-import BudgetComponent from './components/BudgetComponent.vue'
-import RangeComponent from './components/RangeComponent.vue'
+import PresupuestoComponente from './components/PresupuestoComponente.vue'
+import RangoComponente from './components/RangoComponente.vue'
 import MapDestination from './components/MapDestination.vue'
 
 const budget = ref(0)
