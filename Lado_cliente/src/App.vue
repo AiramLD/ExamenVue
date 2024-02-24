@@ -1,17 +1,20 @@
 <script setup>
-import Presupuesto from './components/Presupuesto.vue';
-import Personas from './components/Personas.vue';
-import Dias from './components/Dias.vue';
-import DestinationList from './components/destinationList.vue';
-import MapDestination from './components/MapDestination.vue';
-import { ref, defineProps, computed, onMounted } from 'vue';
 
-const selectedAccommodation = ref(null);
-const accommodationTypes = ["Albergue", "Hostal", "Bed and Breakfast", "Hotel 3*", "Hotel Superior"];
-const destinationsList = ref([]);
-const destinyStyle = ref(null);
-const selectedDestination = ref(null);
+import { ref, onMounted, computed, watch, watchEffect } from 'vue'
+import BudgetComponent from './components/BudgetComponent.vue'
+import RangeComponent from './components/RangeComponent.vue'
+import MapDestination from './components/MapDestination.vue'
 
+const budget = ref(0)
+const emptyBudget = ref(false)
+const person = ref(1)
+const day = ref(1)
+const accommodationTypes = ["Albergue", "Hostal", "Bed and Breakfast", "Hotel 3*", "Hotel Superior" ];
+const destinations = ref([])
+const destination = ref({})
+const accommodation = ref(accommodationTypes[0])
+const selectDestination = ref(false)
+const alertBudget = ref('')
 
 const costsDestinations = {
   cheap: 0.7,
@@ -21,157 +24,206 @@ const costsDestinations = {
 
 const costsAccommodations = {
   "Albergue": 25,
-  "Hostal": 40,
+  "Hostal": 40, 
   "Bed and Breakfast": 65,
-  "Hotel 3*": 100,
-  "Hotel Superior": 200,
+  "Hotel 3*": 100, 
+  "Hotel Superior": 200, 
 }
 
-const dominio = "http://localhost:3000";
-
-function showAcommodationType(type) {
-  return accommodationTypes.includes(type);
+async function sendHttpRequest(method, url, data) {
+  return await fetch(url, {
+    method: method,
+    body: JSON.stringify(data),
+    headers: data ? { 'Content-Type': 'application/json' } : {}
+  }).then((response) => {
+    if (response.status >= 400) {
+      console.log('Error status code:', response.status)
+      console.log('Error URL:', url)
+      return response.json().then((errResData) => {
+        const error = new Error('Something went wrong!')
+        error.data = errResData
+        throw error
+      })
+    }
+    return response.json()
+  })
 }
 
-function getAccommodationsType(type) {
-  return accommodationTypes.includes(type);
+async function listDestinations () {
+  const url = 'http://localhost:3000/api/destinations'
+  const response = await sendHttpRequest('GET', url)
+  destinations.value = response.sort((a, b) => a.name.localeCompare(b.name))
 }
-async function getDestinationsList() {
-  try {
-    const response = await fetch(dominio + '/api/destinations');
-    destinationsList.value = await response.json();
-  } catch (error) {
-    console.error('Error al recuperar los destinos:',error);
+
+function setDestination(dest) {
+  destination.value = dest
+  selectDestination.value = true
+}
+
+function setAccommodation(accom) {
+  accommodation.value = accom
+}
+
+function validateBudget(event) {
+  const value = Number(event.target.value) // Convertir a número
+  if (value <= 0) {
+    budget.value = 0
+    emptyBudget.value = true
+  } else {
+    budget.value = value
+    emptyBudget.value = false
   }
 }
 
+function updatePersons(event) {
+  if (event.target.value <= 0) {
+    person.value = 0
+  } else if (event.target.value > 10) {
+    person.value = 10
+  } else {
+    person.value = event.target.value
+  }
+}
+
+function updateDays(event) {
+  if (event.target.value <= 0) {
+    day.value = 0
+  } else if (event.target.value > 30) {
+    day.value = 30
+  } else {
+    day.value = event.target.value
+  }
+}
+
+const calculateCost = computed(() => {
+  return (costsDestinations[destination.value.economic_level] * costsAccommodations[accommodation.value] * person.value * day.value).toFixed(2)
+});
 
 onMounted(() => {
-  getDestinationsList();
+  listDestinations();
+
+  if (localStorage.getItem('budget') && localStorage.getItem('budget') > 0) {
+    budget.value = Number(localStorage.getItem('budget')) // Convertir a número
+  } else {
+    localStorage.removeItem('budget')
+    emptyBudget.value = true
+  }
+});
+
+watch (budget, () => {
+  if (budget.value <= 0) {
+    emptyBudget.value = true
+    localStorage.removeItem('budget')
+  } else {
+    emptyBudget.value = false
+    localStorage.setItem('budget', budget.value)
+  }
 })
 
-
-const getDestinationClass = (cost) => {
-  return `destiny-${cost}`
-}
-
-async function selectDestination() {
-  try{
-    const response = await fetch(dominio + `/api/destinations/${selectedDestination.value.id}`);
-    const data = await response.json();
-    selectedDestination.value = data;
-  } catch (error) {
-    console.error('Error al recuperar los destinos:',error);
+watchEffect(() => {
+  if (calculateCost.value < budget.value) {
+    alertBudget.value = 'cheap'
+  } else if((calculateCost.value * 90 / 100) < budget.value) {
+    alertBudget.value = 'moderate'
+  } else if (calculateCost.value > budget.value) {
+    alertBudget.value = 'expensive'
   }
-  }
-
-  onMounted(() => {
-    selectDestination();
-  })
-  props: ['budget', 'numPeople', 'numDays', 'selectedAccommodation', 'selectedDestination']
-
+})
 
 </script>
 
-
-
-
 <template>
-  <Presupuesto />
-  <br>
-  <Personas />
-  <br>
-  <Dias />
-  <br>
-  <MapDestination />
-  <br>
-  <DestinationList />
-  <br>
-  <SummaryVue />
-  <br>
-  <div>
-    <label for="accommodation">Tipo de Alojamiento:</label>
-    <select id="accommodation" v-model="selectedAccommodation">
-      <option v-for="type in accommodationTypes" :key="type" :value="type">
-        {{ type }}
-      </option>
-    </select>
-    
-    
-  </div>
-  <br>
-  <div>
-    <label for="destinations">Destinos:</label>
-      <ul>
-        <li v-for="destination in destinationsList" :key="destination.id">
-          {{ destination.name }}
-        </li>
-      </ul>
+  <div id="app">
+    <div class="container-summary">
+      <h1>Destinos turísticos</h1>
+      <p>Para {{ person }} durante {{ day }} en {{ destination.name }} alojándose en {{ accommodation }} </p>
+      <p v-if="selectDestination"> Se estima: {{ calculateCost }} €</p>
     </div>
 
+    <div class="container-budget">
+      <BudgetComponent :budget="budget" :empty-budget="emptyBudget" :alert-budget="alertBudget" @update-budget="validateBudget"/>
+    </div>
 
-    <br>
-    <div>
-    <h2>Destinos Disponibles</h2>
-    <ul>
-      <li v-for="destination in destinations" :key="destination.id" @click="selectDestination(destination)" :class="getDestinationClass(destination.cost)">
-        {{ destination.name }}
-      </li>
-    </ul>
-    <p v-if="selectedDestination">Seleccionado: {{ selectedDestination.name }}</p>
-  </div>
-  <br>
-  
-  <div>
-    <h2>Resumen</h2>
-    <p>Presupuesto: {{ budget }}€</p>
-    <p>Número de Personas: {{ numPeople }}</p>
-    <p>Número de Días: {{ numDays }}</p>
-    <p>Tipo de Alojamiento: {{ selectedAccommodation }}</p>
-    <p>Destino Seleccionado: {{ selectedDestination ? selectedDestination.name : 'No seleccionado' }}</p>
+    <div class="container-days">
+      <RangeComponent :value="day" name="days" min="1" :max="30" @update-input="updateDays"/>
+    </div>
+
+    <div class="container-persons">
+      <RangeComponent :value="person" name="persons" min="1" max="10" @update-input="updatePersons"/>
+    </div>
+
+    <div class="container-accommodation">
+      <label for="accommodation">Tipo de alojamiento</label>
+      <select name="accommodations" id="accommodation" @change="setAccommodation($event.target.value)">
+        <option v-for="accommodation in accommodationTypes" :key="accommodation">{{ accommodation }}</option>
+      </select>
+    </div>
+
+    <div class="container-map" v-if="selectDestination">
+      <MapDestination :lon="destination.coordinates.longitude" :lat="destination.coordinates.latitude" :zoom="2"/>
+    </div>
+
+    <div class="container-destinations">
+      <label for="destinations">Selecciona un destino:</label>
+      <ul>
+        <li v-for="destination in destinations" @click="setDestination(destination)" :key="destination.id" :class="destination.economic_level">{{ destination.name }}</li>
+      </ul>
+    </div>
   </div>
 </template>
 
 
-
-
 <style scoped>
-header {
-  line-height: 1.5;
+
+.container-budget {
+  margin-top: 20px;
+}
+.container-dias {
+  margin-top: 20px;
+  margin-bottom: 20px;
 }
 
-.logo {
-  display: block;
-  margin: 0 auto 2rem;
-}
-
-@media (min-width: 1024px) {
-  header {
-    display: flex;
-    place-items: center;
-    padding-right: calc(var(--section-gap) / 2);
-  }
-
-  .logo {
-    margin: 0 2rem 0 0;
-  }
-
-  header .wrapper {
-    display: flex;
-    place-items: flex-start;
-    flex-wrap: wrap;
-  }
-}
 .expensive {
   color: red;
+}
+
+.cheap {
+  color: green;
 }
 
 .moderate {
   color: orange;
 }
 
-.cheap {
-  color: green;
+.container-personas {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.container-map {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.container-summary {
+  margin-top: 20px;
+}
+
+#app {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #ffffff;
+}
+
+.container-accommodation {
+  margin-top: 20px;
+}
+
+.container-destinos {
+  margin-top: 20px;
+}
+
+ul {
+  list-style-type: none;
 }
 
 </style>
