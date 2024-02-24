@@ -1,3 +1,56 @@
+<template>
+  <div id="app" class="container">
+    <div class="section">
+      <div class="container-summary">
+        <h1>Destinos turísticos</h1>
+        <p>El viaje a " {{ destination.name }} " durante {{ day }} dia(s) hecho por {{ person }} persona(s) y hospedándose en un {{ accommodation }} </p>
+        <p v-if="selectDestination"> Su precio es de : {{ calculateCost }} €</p>
+      </div>
+    </div>
+
+    <!-- Espacio entre secciones -->
+    <div style="margin-top: 20px;"></div>
+
+    <div class="section">
+      <div class="container-budget">
+        <BudgetComponent :budget="budget" :empty-budget="emptyBudget" :alert-budget="alertBudget" @update-budget="validateBudget"/>
+      </div>
+      
+      <div class="container-days">
+        <RangeComponent :value="day" name="days" min="1" :max="30" @update-input="updateDays"/>
+      </div>
+
+      <div class="container-persons">
+        <RangeComponent :value="person" name="persons" min="1" max="10" @update-input="updatePersons"/>
+      </div>
+
+      <div class="container-accommodation">
+        <label for="accommodation">Tipo de alojamiento</label>
+        <select name="accommodations" id="accommodation" @change="setAccommodation($event.target.value)">
+          <option v-for="accommodation in accommodationTypes" :key="accommodation">{{ accommodation }}</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Espacio entre secciones -->
+    <div style="margin-top: 20px;"></div>
+
+    <div class="section">
+      <div class="container-map" v-if="selectDestination">
+        <MapDestination :lon="destination.coordinates.longitude" :lat="destination.coordinates.latitude" :zoom="2"/>
+      </div>
+
+      <div class="container-destinations">
+        <label for="destinations">Selecciona un destino:</label>
+        <ul>
+          <li v-for="destination in destinations" @click="setDestination(destination)" :key="destination.id" :class="destination.economic_level">{{ destination.name }}</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</template>
+
+
 <script setup>
 
 import { ref, onMounted, computed, watch, watchEffect } from 'vue'
@@ -30,29 +83,14 @@ const costsAccommodations = {
   "Hotel Superior": 200, 
 }
 
-async function sendHttpRequest(method, url, data) {
-  return await fetch(url, {
-    method: method,
-    body: JSON.stringify(data),
-    headers: data ? { 'Content-Type': 'application/json' } : {}
-  }).then((response) => {
-    if (response.status >= 400) {
-      console.log('Error status code:', response.status)
-      console.log('Error URL:', url)
-      return response.json().then((errResData) => {
-        const error = new Error('Something went wrong!')
-        error.data = errResData
-        throw error
-      })
-    }
-    return response.json()
-  })
-}
-
 async function listDestinations () {
   const url = 'http://localhost:3000/api/destinations'
-  const response = await sendHttpRequest('GET', url)
-  destinations.value = response.sort((a, b) => a.name.localeCompare(b.name))
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error('Error al obtener los destinos')
+  }
+  const data = await response.json()
+  destinations.value = data.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 function setDestination(dest) {
@@ -132,56 +170,24 @@ watchEffect(() => {
 
 </script>
 
-<template>
-  <div id="app">
-    <div class="container-summary">
-      <h1>Destinos turísticos</h1>
-      <p>Para {{ person }} durante {{ day }} en {{ destination.name }} alojándose en {{ accommodation }} </p>
-      <p v-if="selectDestination"> Se estima: {{ calculateCost }} €</p>
-    </div>
-
-    <div class="container-budget">
-      <BudgetComponent :budget="budget" :empty-budget="emptyBudget" :alert-budget="alertBudget" @update-budget="validateBudget"/>
-    </div>
-
-    <div class="container-days">
-      <RangeComponent :value="day" name="days" min="1" :max="30" @update-input="updateDays"/>
-    </div>
-
-    <div class="container-persons">
-      <RangeComponent :value="person" name="persons" min="1" max="10" @update-input="updatePersons"/>
-    </div>
-
-    <div class="container-accommodation">
-      <label for="accommodation">Tipo de alojamiento</label>
-      <select name="accommodations" id="accommodation" @change="setAccommodation($event.target.value)">
-        <option v-for="accommodation in accommodationTypes" :key="accommodation">{{ accommodation }}</option>
-      </select>
-    </div>
-
-    <div class="container-map" v-if="selectDestination">
-      <MapDestination :lon="destination.coordinates.longitude" :lat="destination.coordinates.latitude" :zoom="2"/>
-    </div>
-
-    <div class="container-destinations">
-      <label for="destinations">Selecciona un destino:</label>
-      <ul>
-        <li v-for="destination in destinations" @click="setDestination(destination)" :key="destination.id" :class="destination.economic_level">{{ destination.name }}</li>
-      </ul>
-    </div>
-  </div>
-</template>
-
 
 <style scoped>
 
-.container-budget {
+
+.container-summary,
+.container-budget,
+.container-days,
+.container-persons,
+.container-accommodation,
+.container-map,
+.container-destinations {
   margin-top: 20px;
 }
+
 .container-dias {
-  margin-top: 20px;
   margin-bottom: 20px;
 }
+
 
 .expensive {
   color: red;
@@ -195,35 +201,25 @@ watchEffect(() => {
   color: orange;
 }
 
-.container-personas {
-  margin-top: 20px;
-  margin-bottom: 20px;
-}
-
-.container-map {
-  margin-top: 20px;
-  margin-bottom: 20px;
-}
-
-.container-summary {
-  margin-top: 20px;
-}
 
 #app {
   font-family: Arial, Helvetica, sans-serif;
   color: #ffffff;
 }
 
-.container-accommodation {
-  margin-top: 20px;
-}
-
-.container-destinos {
-  margin-top: 20px;
-}
-
 ul {
   list-style-type: none;
+}
+
+
+.container-destinations li {
+  cursor: pointer;
+  padding: 5px 0;
+  transition: color 0.3s ease;
+}
+
+.container-destinations li:hover {
+  color: #fff;
 }
 
 </style>
